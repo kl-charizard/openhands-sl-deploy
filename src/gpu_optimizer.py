@@ -21,13 +21,15 @@ class GPUOptimizer:
         self.optimization_applied = False
         
     def _detect_gpu(self) -> Dict[str, Any]:
-        """Detect GPU hardware and capabilities"""
+        """Detect GPU hardware and capabilities (CUDA, Metal, CPU)"""
         gpu_info = {
             'available': False,
             'name': 'None',
             'memory_mb': 0,
             'compute_capability': None,
-            'tesla_p40': False
+            'tesla_p40': False,
+            'apple_metal': False,
+            'platform': self._detect_platform()
         }
         
         try:
@@ -40,12 +42,19 @@ class GPUOptimizer:
                 gpu_name = gpu_details.get('device_name', 'Unknown GPU')
                 gpu_info['name'] = gpu_name
                 
-                # Check if Tesla P40
+                # Check for different GPU types
                 if 'Tesla P40' in gpu_name or 'P40' in gpu_name:
                     gpu_info['tesla_p40'] = True
                     gpu_info['memory_mb'] = 24 * 1024  # 24GB
                     gpu_info['compute_capability'] = '6.1'
                     logger.info("🚀 Tesla P40 detected!")
+                elif 'Apple' in gpu_name or 'Metal' in gpu_name:
+                    gpu_info['apple_metal'] = True
+                    gpu_info['memory_mb'] = 8 * 1024  # Estimate for Apple Silicon
+                    logger.info("🍎 Apple Metal GPU detected!")
+                elif any(x in gpu_name.lower() for x in ['geforce', 'quadro', 'rtx', 'gtx']):
+                    gpu_info['memory_mb'] = 8 * 1024  # Default estimate
+                    logger.info(f"🎮 NVIDIA GPU detected: {gpu_name}")
                 
                 # Get memory info
                 try:
@@ -61,9 +70,27 @@ class GPUOptimizer:
         
         return gpu_info
     
+    def _detect_platform(self) -> str:
+        """Detect the current platform"""
+        import platform
+        system = platform.system().lower()
+        machine = platform.machine().lower()
+        
+        if system == 'darwin':
+            if machine == 'arm64':
+                return 'apple_silicon'
+            else:
+                return 'intel_mac'
+        elif system == 'linux':
+            return 'linux'
+        elif system == 'windows':
+            return 'windows'
+        else:
+            return 'unknown'
+    
     def optimize_for_inference(self) -> bool:
         """
-        Apply Tesla P40 optimizations for inference
+        Apply platform-specific optimizations for inference
         
         Returns:
             True if optimizations applied successfully
@@ -71,7 +98,8 @@ class GPUOptimizer:
         if self.optimization_applied:
             return True
             
-        logger.info("⚡ Applying Tesla P40 optimizations...")
+        platform = self.gpu_info['platform']
+        logger.info(f"⚡ Applying {platform} optimizations...")
         
         try:
             gpus = tf.config.list_physical_devices('GPU')
@@ -84,14 +112,33 @@ class GPUOptimizer:
                 tf.config.experimental.set_memory_growth(gpu, True)
                 logger.info("✅ Memory growth enabled")
             
-            # Mixed precision for faster inference
-            policy = tf.keras.mixed_precision.Policy('mixed_float16')
-            tf.keras.mixed_precision.set_global_policy(policy)
-            logger.info("✅ Mixed precision enabled (FP16)")
-            
-            # XLA (Accelerated Linear Algebra) compilation
-            tf.config.optimizer.set_jit(True)
-            logger.info("✅ XLA JIT compilation enabled")
+            # Platform-specific optimizations
+            if platform in ['apple_silicon', 'intel_mac']:
+                # macOS optimizations
+                logger.info("🍎 Applying macOS optimizations...")
+                try:
+                    # Enable mixed precision if supported
+                    policy = tf.keras.mixed_precision.Policy('mixed_float16')
+                    tf.keras.mixed_precision.set_global_policy(policy)
+                    logger.info("✅ Mixed precision enabled (FP16)")
+                except Exception as e:
+                    logger.warning(f"⚠️ Mixed precision failed: {e}")
+                
+                # XLA may not be fully supported on all Mac configurations
+                try:
+                    tf.config.optimizer.set_jit(True)
+                    logger.info("✅ XLA JIT compilation enabled")
+                except Exception as e:
+                    logger.warning(f"⚠️ XLA JIT failed: {e}")
+                    
+            else:
+                # CUDA/Windows/Linux optimizations
+                policy = tf.keras.mixed_precision.Policy('mixed_float16')
+                tf.keras.mixed_precision.set_global_policy(policy)
+                logger.info("✅ Mixed precision enabled (FP16)")
+                
+                tf.config.optimizer.set_jit(True)
+                logger.info("✅ XLA JIT compilation enabled")
             
             # Optimize for inference (not training)
             tf.config.optimizer.set_experimental_options({
@@ -113,20 +160,27 @@ class GPUOptimizer:
             })
             logger.info("✅ Inference optimizations enabled")
             
-            # Tesla P40 specific optimizations
+            # Hardware-specific optimizations
             if self.gpu_info['tesla_p40']:
-                # Configure for Compute Capability 6.1
                 logger.info("🎯 Applying Tesla P40 specific optimizations...")
-                
-                # Set device placement
                 tf.config.set_soft_device_placement(True)
-                
-                # Enable tensor fusion
                 tf.config.optimizer.set_experimental_options({
                     'enable_tensor_fusion': True
                 })
-                
                 logger.info("✅ Tesla P40 optimizations applied")
+                
+            elif self.gpu_info['apple_metal']:
+                logger.info("🍎 Applying Apple Metal optimizations...")
+                # Apple Silicon specific optimizations
+                tf.config.set_soft_device_placement(True)
+                logger.info("✅ Apple Metal optimizations applied")
+                
+            elif platform == 'intel_mac':
+                logger.info("💻 Applying Intel Mac CPU optimizations...")
+                # Optimize for Intel Mac CPU
+                tf.config.threading.set_inter_op_parallelism_threads(0)  # Use all cores
+                tf.config.threading.set_intra_op_parallelism_threads(0)  # Use all cores
+                logger.info("✅ Intel Mac CPU optimizations applied")
             
             self.optimization_applied = True
             return True

@@ -1,0 +1,67 @@
+# OpenHands ASL Recognition - macOS Dependencies
+# Supports both GPU (CUDA/Metal) and CPU execution
+
+# Core AI/ML Framework (macOS compatible)
+tensorflow-macos>=2.12.0,<2.16.0  # Apple Silicon optimized TensorFlow
+# tensorflow-metal>=0.8.0  # Uncomment for M1/M2 GPU acceleration
+
+# Alternative for Intel Mac or CPU-only
+# tensorflow>=2.12.0,<2.16.0  # Standard TensorFlow for Intel Mac
+
+# OpenHands and Sign Language (install manually if needed)
+# OpenHands  # May need: pip install git+https://github.com/AI4Bharat/OpenHands.git
+
+# Computer Vision & Image Processing
+opencv-python>=4.8.0
+mediapipe>=0.10.0
+
+# Core dependencies
+numpy>=1.21.0
+Pillow>=9.0.0
+scikit-image>=0.19.0
+
+# Video Processing
+imageio>=2.25.0
+imageio-ffmpeg>=0.4.8
+
+# Data Science & Utilities
+pandas>=1.5.0
+matplotlib>=3.6.0
+seaborn>=0.12.0
+tqdm>=4.64.0
+
+# Model Optimization & Quantization
+tensorflow-model-optimization>=0.7.4
+tf2onnx>=1.14.0
+
+# Core ML for iOS deployment (macOS native)
+coremltools>=7.0.0
+
+# TensorFlow Lite
+tensorflow-lite-support>=0.4.4
+
+# Web Interface (Optional)
+flask>=2.3.0
+websockets>=11.0
+
+# Development & Testing
+pytest>=7.4.0
+jupyter>=1.0.0
+ipykernel>=6.25.0
+
+# Performance Monitoring
+psutil>=5.9.0
+
+# Configuration Management
+pyyaml>=6.0
+python-dotenv>=1.0.0
+
+# Logging
+loguru>=0.7.0
+
+# File Handling
+pathlib2>=2.3.7
+
+# macOS specific
+# pyobjc-core>=9.0  # For native macOS integration (optional)
+# pyobjc-framework-AVFoundation>=9.0  # For camera access (optional)

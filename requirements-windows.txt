@@ -1,0 +1,56 @@
+# OpenHands ASL Recognition - Windows Specific Dependencies
+
+# Core AI/ML Framework (Windows compatible versions)
+tensorflow==2.12.0
+opencv-python==4.8.1.78
+mediapipe==0.10.8
+
+# OpenHands (may need manual installation on Windows)
+# pip install git+https://github.com/AI4Bharat/OpenHands.git
+
+# Computer Vision & Image Processing  
+numpy==1.24.3
+Pillow==10.0.1
+scikit-image==0.21.0
+
+# Video Processing (Windows compatible)
+imageio==2.31.5
+imageio-ffmpeg==0.4.9
+
+# Data Science & Utilities
+pandas==2.1.3
+matplotlib==3.8.1
+seaborn==0.13.0
+tqdm==4.66.1
+
+# Model Quantization & Optimization
+tensorflow-model-optimization==0.7.4
+
+# Web Interface (Optional)
+flask==3.0.0
+websockets==12.0
+
+# Development & Testing
+pytest==7.4.3
+jupyter==1.0.0
+
+# Mobile Deployment Helpers  
+tensorflow-lite-support==0.4.4
+
+# Performance Monitoring
+psutil==5.9.6
+GPUtil==1.4.0
+
+# Configuration Management
+pyyaml==6.0.1
+python-dotenv==1.0.0
+
+# Logging
+loguru==0.7.2
+
+# Windows specific fixes
+pywin32>=306  # Windows service integration
+wmi>=1.5.1    # Windows hardware monitoring
+
+# Note: TensorRT excluded for Windows compatibility
+# Note: Some packages may need Visual C++ Build Tools

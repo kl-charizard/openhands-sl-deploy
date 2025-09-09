@@ -5,4 +5,6 @@
 **This project is no longer maintained due to a large number of unresolved bugs.** It is not recommended for production use.
 
 ### OpenHands ASL Recognition - Complete Training & Deployment Platform
-*This was a complete training and deployment platform for American Sign Language (ASL) recognition.*
+*This was a complete training and deployment platform for American Sign Language (ASL) recognition with the openhand framework.
+
+https://openhands.ai4bharat.org/en/latest/

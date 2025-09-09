@@ -18,7 +18,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 try:
     import tensorflow as tf
     import mediapipe as mp
-    from openhands import OpengHands  # Note: may need to handle import errors
+    from openhands.models import loader  # Use the correct OpenHands API
 except ImportError as e:
     print(f"❌ Import Error: {e}")
     print("📦 Install missing dependencies:")
@@ -89,11 +89,11 @@ class ASLWebcamRecognizer:
             # Try to load OpenHands model
             if model_path and Path(model_path).exists():
                 # Load custom model path
-                self.model = OpengHands.load_model(model_path)
+                self.model = OpenHands.load_model(model_path)
                 logger.info(f"✅ Custom model loaded: {model_path}")
             else:
                 # Load default pretrained ASL model
-                self.model = OpengHands.load_pretrained('asl')
+                self.model = OpenHands.load_pretrained('asl')
                 logger.info("✅ Default OpenHands ASL model loaded")
                 
             # Get model info

@@ -3,18 +3,18 @@ import CoreML
 import Vision
 import UIKit
 import AVFoundation
+import Combine
 
 /**
  * 🤖 OpenHands ASL Recognition for iOS
  * Core ML implementation with pose-based inference
  */
-@available(iOS 13.0, *)
+@available(iOS 14.0, *)
 class ASLRecognizer: ObservableObject {
     
     // MARK: - Properties
     
-    private var model: ASLClassifier?
-    private var poseExtractor: PoseExtractor
+    private var model: MLModel?
     private let confidenceThreshold: Float = 0.7
     private let inputSize = 158  // Pose features
     private let outputSize = 2000  // ASL vocabulary
@@ -25,7 +25,6 @@ class ASLRecognizer: ObservableObject {
     // MARK: - Initialization
     
     init() {
-        self.poseExtractor = PoseExtractor()
         setupModel()
     }
     
@@ -41,7 +40,39 @@ class ASLRecognizer: ObservableObject {
                 let configuration = MLModelConfiguration()
                 configuration.computeUnits = .all  // Use GPU if available
                 
-                self?.model = try ASLClassifier(configuration: configuration)
+                // Load the Core ML model directly
+                var modelURL: URL?
+                
+                // Try multiple ways to find the model
+                // Method 1: Look for compiled model (.mlmodelc)
+                if let compiledURL = Bundle.main.url(forResource: "ASLClassifier", withExtension: "mlmodelc") {
+                    modelURL = compiledURL
+                    print("✅ Found compiled model: \(compiledURL.path)")
+                }
+                // Method 2: Look for source model (.mlmodel)  
+                else if let sourceURL = Bundle.main.url(forResource: "ASLClassifier", withExtension: "mlmodel") {
+                    modelURL = sourceURL
+                    print("✅ Found source model: \(sourceURL.path)")
+                }
+                // Method 3: Debug - list all bundle resources
+                else {
+                    print("❌ Model not found. Bundle resources:")
+                    if let resourcePath = Bundle.main.resourcePath {
+                        do {
+                            let resources = try FileManager.default.contentsOfDirectory(atPath: resourcePath)
+                            for resource in resources.sorted() {
+                                print("  - \(resource)")
+                            }
+                        } catch {
+                            print("  Error listing resources: \(error)")
+                        }
+                    }
+                }
+                
+                guard let url = modelURL else {
+                    throw NSError(domain: "ASLRecognizer", code: 1, userInfo: [NSLocalizedDescriptionKey: "ASLClassifier.mlmodel not found in app bundle"])
+                }
+                self?.model = try MLModel(contentsOf: url, configuration: configuration)
                 
                 DispatchQueue.main.async {
                     self?.isReady = true
@@ -75,8 +106,8 @@ class ASLRecognizer: ObservableObject {
         }
         
         do {
-            // Extract pose features
-            guard let poseFeatures = poseExtractor.extractPoseFeatures(from: pixelBuffer) else {
+            // Extract pose features using Vision framework directly
+            guard let poseFeatures = extractBasicFeatures(from: pixelBuffer) else {
                 let inferenceTime = Int64((CFAbsoluteTimeGetCurrent() - startTime) * 1000)
                 return ASLResult(
                     predictedSign: "",
@@ -95,15 +126,20 @@ class ASLRecognizer: ObservableObject {
             }
             
             // Run prediction
-            let prediction = try model.prediction(input: inputArray)
+            let inputDict = ["input": inputArray]
+            let prediction = try model.prediction(from: MLDictionaryFeatureProvider(dictionary: inputDict))
             
             // Process output
-            let probabilities = prediction.output
+            guard let outputFeature = prediction.featureValue(for: "output"),
+                  let probabilities = outputFeature.multiArrayValue else {
+                throw NSError(domain: "ASLRecognizer", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid model output"])
+            }
+            
             var bestIndex = 0
             var bestConfidence: Float = 0.0
             
             // Find highest confidence prediction
-            for i in 0..<min(outputSize, probabilities.count) {
+            for i in 0..<min(30, probabilities.count) { // Use 30 as our actual class count
                 let confidence = probabilities[i].floatValue
                 if confidence > bestConfidence {
                     bestConfidence = confidence
@@ -160,7 +196,7 @@ class ASLRecognizer: ObservableObject {
         guard isReady, let model = model else { return [] }
         
         do {
-            guard let poseFeatures = poseExtractor.extractPoseFeatures(from: pixelBuffer) else {
+            guard let poseFeatures = extractBasicFeatures(from: pixelBuffer) else {
                 return []
             }
             
@@ -171,12 +207,17 @@ class ASLRecognizer: ObservableObject {
                 }
             }
             
-            let prediction = try model.prediction(input: inputArray)
-            let probabilities = prediction.output
+            let inputDict = ["input": inputArray]
+            let prediction = try model.prediction(from: MLDictionaryFeatureProvider(dictionary: inputDict))
+            
+            guard let outputFeature = prediction.featureValue(for: "output"),
+                  let probabilities = outputFeature.multiArrayValue else {
+                return []
+            }
             
             // Create (index, confidence) pairs and sort by confidence
             var indexConfidencePairs: [(Int, Float)] = []
-            for i in 0..<min(outputSize, probabilities.count) {
+            for i in 0..<min(30, probabilities.count) {
                 indexConfidencePairs.append((i, probabilities[i].floatValue))
             }
             
@@ -247,6 +288,56 @@ class ASLRecognizer: ObservableObject {
         return sentenceParts.joined(separator: " ")
     }
     
+    // MARK: - Feature Extraction
+    
+    /**
+     * Extract basic features from pixel buffer for recognition
+     */
+    private func extractBasicFeatures(from pixelBuffer: CVPixelBuffer) -> [Float]? {
+        // Simple feature extraction using Vision framework
+        let request = VNDetectHumanHandPoseRequest()
+        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:])
+        
+        do {
+            try handler.perform([request])
+            
+            guard let observations = request.results, !observations.isEmpty else {
+                return nil
+            }
+            
+            var features: [Float] = []
+            
+            // Extract hand landmarks (simplified)
+            for observation in observations.prefix(2) { // Max 2 hands
+                // Get key landmarks
+                let landmarkKeys: [VNHumanHandPoseObservation.JointName] = [
+                    .wrist, .thumbTip, .indexTip, .middleTip, .ringTip, .littleTip
+                ]
+                
+                for key in landmarkKeys {
+                    if let point = try? observation.recognizedPoint(key) {
+                        features.append(Float(point.location.x))
+                        features.append(Float(point.location.y))
+                        features.append(Float(point.confidence))
+                    } else {
+                        features.append(contentsOf: [0.0, 0.0, 0.0])
+                    }
+                }
+            }
+            
+            // Pad features to expected input size
+            while features.count < inputSize {
+                features.append(0.0)
+            }
+            
+            return Array(features.prefix(inputSize))
+            
+        } catch {
+            print("❌ Feature extraction failed: \(error)")
+            return nil
+        }
+    }
+    
     // MARK: - Utilities
     
     /**
@@ -294,40 +385,6 @@ class ASLRecognizer: ObservableObject {
     }
 }
 
-// MARK: - Supporting Types
-
-/**
- * ASL Recognition Result
- */
-struct ASLResult: Identifiable, Codable {
-    let id = UUID()
-    let predictedSign: String
-    let confidence: Float
-    let message: String
-    let inferenceTimeMs: Int64
-    let timestamp: Date
-    
-    init(predictedSign: String, confidence: Float, message: String, inferenceTimeMs: Int64) {
-        self.predictedSign = predictedSign
-        self.confidence = confidence
-        self.message = message
-        self.inferenceTimeMs = inferenceTimeMs
-        self.timestamp = Date()
-    }
-}
-
-/**
- * Model Information
- */
-struct ModelInfo {
-    let modelPath: String
-    let inputSize: Int
-    let outputSize: Int
-    let vocabularySize: Int
-    let quantization: String
-    let status: String
-    let device: String
-}
 
 // MARK: - UIImage Extension
 

@@ -1,7 +1,11 @@
-# Virtual environment
+# Virtual environment (NEVER commit these!)
 venv/
 env/
 ENV/
+.venv/
+.env/
+venv*/
+env*/
 
 # macOS system files
 .DS_Store
